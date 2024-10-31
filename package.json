@@ -1,6 +1,6 @@
 {
   "name": "react-native-drag-dnd-board",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Drag and drop Kanban board like Trello",
   "main": "src/index.js",
   "scripts": {
@@ -29,7 +29,7 @@
   "license": "MIT",
   "dependencies": {
     "react-native-gesture-handler": "2.14.0",
-    "react-native-reanimated": "2.12.0"
+    "react-native-reanimated": "3.8.0"
   },
   "bugs": {
     "url": "https://github.com/huynhuchuy2001/react-native-dnd-board/issues"

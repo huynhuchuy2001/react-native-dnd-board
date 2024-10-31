@@ -1,24 +1,21 @@
-import React, {
-  useRef,
-  useState,
-  useCallback,
-  useMemo,
-  useEffect,
-} from "react";
+import React, { useRef, useState, useEffect } from 'react';
 import {
   PanGestureHandler,
-  State,
   ScrollView,
   GestureHandlerRootView,
-} from "react-native-gesture-handler";
-import Animated from "react-native-reanimated";
+  State,
+} from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedGestureHandler,
+  useAnimatedStyle,
+  runOnJS,
+} from 'react-native-reanimated';
 
-import style from "./style";
-import Column from "./components/column";
-import Repository from "./handlers/repository";
-import Utils from "./commons/utils";
-
-const { block, call, cond } = Animated;
+import style from './style';
+import Column from './components/column';
+import Repository from './handlers/repository';
+import Utils from './commons/utils';
 
 const SCROLL_THRESHOLD = 50;
 const SCROLL_STEP = 8;
@@ -30,7 +27,7 @@ const DraggableBoard = ({
   columnWidth,
   accessoryRight,
   activeRowStyle,
-  activeRowRotation = 8,
+  // activeRowRotation = 8,
   xScrollThreshold = SCROLL_THRESHOLD,
   yScrollThreshold = SCROLL_THRESHOLD,
   dragSpeedFactor = 1,
@@ -44,73 +41,20 @@ const DraggableBoard = ({
   const [hoverComponent, setHoverComponent] = useState(null);
   const [movingMode, setMovingMode] = useState(false);
 
-  let translateX = useRef(new Animated.Value(0)).current;
-  let translateY = useRef(new Animated.Value(0)).current;
+  let translateX = useSharedValue(0);
+  let translateY = useSharedValue(0);
 
-  let absoluteX = useRef(new Animated.Value(0)).current;
-  let absoluteY = useRef(new Animated.Value(0)).current;
+  let absoluteX = useSharedValue(0);
+  let absoluteY = useSharedValue(0);
 
   const scrollViewRef = useRef();
   const scrollOffset = useRef(0);
   const hoverRowItem = useRef();
 
   useEffect(() => {
-    repository.setReload(() => setForceUpdate((prevState) => !prevState));
+    repository.setReload(() => setForceUpdate(prevState => !prevState));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const onPanGestureEvent = useMemo(
-    () =>
-      Animated.event(
-        [
-          {
-            nativeEvent: {
-              translationX: translateX,
-              translationY: translateY,
-              absoluteX,
-              absoluteY,
-            },
-          },
-        ],
-        { useNativeDriver: true }
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
-
-  const onHandlerStateChange = (event) => {
-    switch (event.nativeEvent.state) {
-      case State.CANCELLED:
-      case State.END:
-      case State.FAILED:
-      case State.UNDETERMINED:
-        if (movingMode) {
-          translateX.setValue(0);
-          translateY.setValue(0);
-
-          absoluteX.setValue(0);
-          absoluteY.setValue(0);
-
-          setHoverComponent(null);
-          setMovingMode(false);
-
-          if (onDragEnd) {
-            onDragEnd(
-              hoverRowItem.current.oldColumnId,
-              hoverRowItem.current.columnId,
-              hoverRowItem.current
-            );
-
-            repository.updateOriginalData();
-          }
-
-          repository.showRow(hoverRowItem.current);
-          hoverRowItem.current = null;
-        }
-
-        break;
-    }
-  };
 
   const listenRowChangeColumn = (fromColumnId, toColumnId) => {
     hoverRowItem.current.columnId = toColumnId;
@@ -123,11 +67,10 @@ const DraggableBoard = ({
         hoverRowItem.current,
         x,
         y,
-        listenRowChangeColumn
+        listenRowChangeColumn,
       );
 
       if (columnAtPosition && scrollViewRef.current) {
-        // handle scroll horizontal
         if (x + xScrollThreshold > Utils.deviceWidth) {
           scrollOffset.current += SCROLL_STEP;
           scrollViewRef.current.scrollTo({
@@ -145,61 +88,86 @@ const DraggableBoard = ({
           });
           repository.measureColumnsLayout();
         }
-
-        // handle scroll inside item
-        // if (y + SCROLL_THRESHOLD > columnAtPosition.layout.y) {
-        //   repository.columns[columnAtPosition.id].scrollOffset(y + SCROLL_STEP);
-        // } else if (y < SCROLL_THRESHOLD) {
-        //   repository.columns[columnAtPosition.id].scrollOffset(y - SCROLL_STEP);
-        // }
       }
     }
   };
 
-  const handleColumnPosition = ([x, y]) => {
-    //
+  const onHandlerStateChange = event => {
+    switch (event.nativeEvent.state) {
+      case State.CANCELLED:
+      case State.END:
+      case State.FAILED:
+      case State.UNDETERMINED:
+        if (movingMode) {
+          translateX.value = 0;
+          translateY.value = 0;
+
+          absoluteX.value = 0;
+          absoluteY.value = 0;
+
+          setHoverComponent(null);
+          setMovingMode(false);
+
+          if (onDragEnd) {
+            onDragEnd(
+              hoverRowItem.current.oldColumnId,
+              hoverRowItem.current.columnId,
+              hoverRowItem.current,
+            );
+
+            repository.updateOriginalData();
+          }
+
+          repository.showRow(hoverRowItem.current);
+          hoverRowItem.current = null;
+        }
+
+        break;
+    }
   };
 
-  const onScroll = (event) => {
-    scrollOffset.current = event.nativeEvent.contentOffset.x;
-  };
+  const onPanGestureEvent = useAnimatedGestureHandler({
+    onStart: (event, ctx) => {
+      ctx.startX = translateX.value;
+      ctx.startY = translateY.value;
+    },
+    onActive: event => {
+      translateX.value = event.translationX;
+      translateY.value = event.translationY;
+      absoluteX.value = event.absoluteX;
+      absoluteY.value = event.absoluteY;
+      runOnJS(handleRowPosition)([absoluteX.value, absoluteY.value]);
+    },
+    onEnd: () => {},
+  });
 
-  const onScrollEnd = (event) => {
-    scrollOffset.current = event.nativeEvent.contentOffset.x;
-    repository.measureColumnsLayout();
-  };
-
-  const keyExtractor = useCallback(
-    (item, index) => `${item.id}${item.name}${index}`,
-    []
-  );
+  const animatedHoverStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+  }));
 
   const renderHoverComponent = () => {
     if (hoverComponent && hoverRowItem.current) {
       const row = repository.findRow(hoverRowItem.current);
-
       if (row && row.layout) {
         const { x, y, width, height } = row.layout;
-        const hoverStyle = [
-          style.hoverComponent,
-          activeRowStyle,
-          {
-            transform: [
-              { translateX },
-              { translateY },
-              { rotate: `${activeRowRotation}deg` },
-            ],
-          },
-          {
-            top: y - yScrollThreshold,
-            left: x,
-            width,
-            height,
-          },
-        ];
-
         return (
-          <Animated.View style={hoverStyle}>{hoverComponent}</Animated.View>
+          <Animated.View
+            style={[
+              style.hoverComponent,
+              activeRowStyle,
+              animatedHoverStyle,
+              {
+                top: y - yScrollThreshold,
+                left: x,
+                width,
+                height,
+              },
+            ]}>
+            {hoverComponent}
+          </Animated.View>
         );
       }
     }
@@ -215,7 +183,7 @@ const DraggableBoard = ({
     setHoverComponent(hoverItem);
   };
 
-  const drag = (column) => {
+  const drag = column => {
     const hoverColumn = renderColumnWrapper({
       move: moveItem,
       item: column.data,
@@ -227,15 +195,14 @@ const DraggableBoard = ({
   const renderColumns = () => {
     const columns = repository.getColumns();
     return columns.map((column, index) => {
-      const key = keyExtractor(column, index);
-
+      const key = `${column.id}${column.name}${index}`;
       const columnComponent = (
         <Column
           repository={repository}
           column={column}
           move={moveItem}
           renderColumnWrapper={renderColumnWrapper}
-          keyExtractor={keyExtractor}
+          keyExtractor={(item, idx) => `${item.id}${item.name}${idx}`}
           renderRow={renderRow}
           scrollEnabled={!movingMode}
           columnWidth={columnWidth}
@@ -251,8 +218,8 @@ const DraggableBoard = ({
         drag: () => drag(column),
         layoutProps: {
           key,
-          ref: (ref) => repository.updateColumnRef(column.id, ref),
-          onLayout: (layout) => repository.updateColumnLayout(column.id),
+          ref: ref => repository.updateColumnRef(column.id, ref),
+          onLayout: () => repository.updateColumnLayout(column.id),
         },
       });
     });
@@ -262,8 +229,7 @@ const DraggableBoard = ({
     <GestureHandlerRootView style={style.container}>
       <PanGestureHandler
         onGestureEvent={onPanGestureEvent}
-        onHandlerStateChange={onHandlerStateChange}
-      >
+        onHandlerStateChange={onHandlerStateChange}>
         <Animated.View style={[style.container, boardStyle]}>
           <ScrollView
             ref={scrollViewRef}
@@ -273,27 +239,12 @@ const DraggableBoard = ({
             showsHorizontalScrollIndicator={false}
             showsVerticalScrollIndicator={false}
             scrollEventThrottle={16}
-            onScroll={onScroll}
-            onScrollEndDrag={onScrollEnd}
-            onMomentumScrollEnd={onScrollEnd}
-          >
+            onScroll={event =>
+              (scrollOffset.current = event.nativeEvent.contentOffset.x)
+            }
+            onScrollEndDrag={() => repository.measureColumnsLayout()}
+            onMomentumScrollEnd={() => repository.measureColumnsLayout()}>
             {renderColumns()}
-
-            <Animated.Code>
-              {() =>
-                block([
-                  cond(
-                    movingMode,
-                    call([absoluteX, absoluteY], handleRowPosition)
-                  ),
-                  cond(
-                    movingMode,
-                    call([translateX, translateY], handleColumnPosition)
-                  ),
-                ])
-              }
-            </Animated.Code>
-
             {Utils.isFunction(accessoryRight)
               ? accessoryRight()
               : accessoryRight}
