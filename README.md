@@ -32,13 +32,13 @@ Install this package using `npm` or `yarn`
 with `npm`:
 
 ```
-npm install react-native-dnd-board
+npm install react-native-drag-dnd-board
 ```
 
 with `yarn`:
 
 ```
-yarn add react-native-dnd-board
+yarn add react-native-drag-dnd-board
 ```
 
 ## API reference
