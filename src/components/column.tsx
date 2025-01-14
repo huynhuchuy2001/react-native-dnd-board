@@ -1,11 +1,37 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View } from 'react-native';
+import { View, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 
 import style from '../style';
 import Row from './row';
 
-const Column = ({
+interface ColumnProps {
+  repository: {
+    updateRowRef: (columnId: string, rowId: string, ref: any) => void;
+    updateRowLayout: (columnId: string, rowId: string) => void;
+    getRowsByColumnId: (columnId: string) => any[];
+    addListener: (
+      columnId: string,
+      event: string,
+      callback: () => void,
+    ) => void;
+    setColumnScrollRef: (columnId: string, ref: any) => void;
+  };
+  move: any;
+  column: {
+    id: string;
+    rows: any[];
+    measureRowLayout: () => void;
+  };
+  keyExtractor: (item: any, index: number) => string;
+  renderRow: (item: any) => React.ReactElement;
+  scrollEnabled: boolean;
+  columnWidth: number;
+  onDragStartCallback?: () => void;
+  onRowPress?: (item: any) => void;
+}
+
+const Column: React.FC<ColumnProps> = ({
   repository,
   move,
   column,
@@ -15,29 +41,32 @@ const Column = ({
   columnWidth,
   onDragStartCallback,
   onRowPress = () => {},
-}) => {
-  const [rows, setRows] = useState(column.rows);
+}: ColumnProps) => {
+  const [rows, setRows] = useState<any[]>(column.rows);
 
-  const verticalOffset = useRef(0);
-  const columnRef = useRef();
+  const verticalOffset = useRef<number>(0);
+  const columnRef = useRef<any>(null);
 
-  const onScroll = useCallback(event => {
-    verticalOffset.current = event.nativeEvent.contentOffset.x;
-  }, []);
+  const onScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      verticalOffset.current = event.nativeEvent.contentOffset.x;
+    },
+    [],
+  );
 
   const onScrollEnd = useCallback(
-    event => {
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       verticalOffset.current = event.nativeEvent.contentOffset.x;
       column.measureRowLayout();
     },
     [column],
   );
 
-  const renderRowItem = ({ item, index }) => {
+  const renderRowItem = ({ item, index }: { item: any; index: number }) => {
     return (
       <View
-        ref={ref => repository.updateRowRef(column.id, item.id, ref)}
-        onLayout={layout => repository.updateRowLayout(column.id, item.id)}>
+        ref={(ref: any) => repository.updateRowRef(column.id, item.id, ref)}
+        onLayout={(layout: any) => repository.updateRowLayout(column.id, item.id)}>
         <Row
           row={item}
           move={move}
@@ -64,7 +93,7 @@ const Column = ({
     setRows(column.rows);
   }, [column.id, column.rows, column.rows.length, repository]);
 
-  const setRef = ref => {
+  const setRef = (ref: any) => {
     columnRef.current = ref;
     repository.setColumnScrollRef(column.id, columnRef.current);
   };

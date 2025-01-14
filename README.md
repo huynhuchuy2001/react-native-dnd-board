@@ -1,6 +1,6 @@
 # React Native DnD Board
 
-A drag and drop Kanban board for React Native using [Reanimated (V2)](https://github.com/software-mansion/react-native-reanimated) and [React Native Gesture Handler](https://github.com/software-mansion/react-native-gesture-handler).
+A drag and drop Kanban board for React Native using [Reanimated (V3)](https://github.com/software-mansion/react-native-reanimated) and [React Native Gesture Handler (V2)](https://github.com/software-mansion/react-native-gesture-handler).
 
 <img src="./demo-ios.gif" width="400">   <img src="./demo-android.gif" width="396">
 
@@ -8,11 +8,11 @@ A drag and drop Kanban board for React Native using [Reanimated (V2)](https://gi
 
 ### Step 1:
 
-Install [Reanimated V2](https://docs.swmansion.com/react-native-reanimated/docs/2.x.x/getting_started).
+Install [Reanimated V3](https://docs.swmansion.com/react-native-reanimated/docs/3.x.x/getting_started).
 
 ### Step 2:
 
-Install [React Native Gesture Handler](https://docs.swmansion.com/react-native-gesture-handler/docs/).
+Install [React Native Gesture Handler V2](https://docs.swmansion.com/react-native-gesture-handler/docs/).
 
 Make sure your `MainActivity.java` was updated by [follow all Android instructions](https://docs.swmansion.com/react-native-gesture-handler/docs/#android).
 
@@ -90,7 +90,7 @@ repository.deleteRow(rowId);
 ```js
 const { rows } = repository.getItemsChanged();
 ```
-**[Example](https://github.com/huynhuchuy2001/react-native-dnd-board/blob/main/example/App.js)**
+**[Example](https://github.com/huynhuchuy2001/react-native-dnd-board/blob/main/example/App.tsx)**
 ## Usage
 
 You need to build `Repository`
