@@ -117,7 +117,7 @@ const App: React.FC = () => {
     columnComponent: React.ReactNode;
     layoutProps: any;
   }) => (
-    <View style={styles.column} {...layoutProps}>
+    <View style={styles.column} {...layoutProps} key={item.id}>
       <View style={styles.columnHeader}>
         <Text style={styles.columnName}>{item.name}</Text>
         <TouchableOpacity
@@ -134,11 +134,11 @@ const App: React.FC = () => {
   );
 
   const onCardPress = (card: Row) => {
-    console.log('Card ID: ', card.id);
+    console.log('Card ID: ', card);
   };
 
   const onDragEnd = (fromColumnId: string, toColumnId: string, card: Row) => {
-    // Handle drag end
+    console.log(fromColumnId, toColumnId, card);
   };
 
   return (

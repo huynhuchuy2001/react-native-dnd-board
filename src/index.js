@@ -1,21 +1,20 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
-  PanGestureHandler,
+  Gesture,
+  GestureDetector,
   ScrollView,
   GestureHandlerRootView,
-  State,
-} from 'react-native-gesture-handler';
+} from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
-  useAnimatedGestureHandler,
   useAnimatedStyle,
   runOnJS,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
-import style from './style';
-import Column from './components/column';
-import Repository from './handlers/repository';
-import Utils from './commons/utils';
+import style from "./style";
+import Column from "./components/column";
+import Repository from "./handlers/repository";
+import Utils from "./commons/utils";
 
 const SCROLL_THRESHOLD = 50;
 const SCROLL_STEP = 8;
@@ -27,10 +26,8 @@ const DraggableBoard = ({
   columnWidth,
   accessoryRight,
   activeRowStyle,
-  // activeRowRotation = 8,
   xScrollThreshold = SCROLL_THRESHOLD,
   yScrollThreshold = SCROLL_THRESHOLD,
-  dragSpeedFactor = 1,
   onRowPress = () => {},
   onDragStart = () => {},
   onDragEnd = () => {},
@@ -43,48 +40,59 @@ const DraggableBoard = ({
 
   let translateX = useSharedValue(0);
   let translateY = useSharedValue(0);
-
-  let absoluteX = useSharedValue(0);
-  let absoluteY = useSharedValue(0);
+  const boardLayout = useSharedValue({ width: 0, height: 0, x: 0, y: 0 });
 
   const scrollViewRef = useRef();
   const scrollOffset = useRef(0);
   const hoverRowItem = useRef();
 
   useEffect(() => {
-    repository.setReload(() => setForceUpdate(prevState => !prevState));
+    repository.setReload(() => setForceUpdate((prevState) => !prevState));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const listenRowChangeColumn = (fromColumnId, toColumnId) => {
+  const listenRowChangeColumnJS = (fromColumnId, toColumnId) => {
     hoverRowItem.current.columnId = toColumnId;
     hoverRowItem.current.oldColumnId = fromColumnId;
   };
 
-  const handleRowPosition = ([x, y]) => {
-    if (hoverRowItem.current && (x || y)) {
-      const columnAtPosition = repository.moveRow(
-        hoverRowItem.current,
-        x,
-        y,
-        listenRowChangeColumn,
-      );
+  const handleRowPositionAndScroll = (absoluteX, absoluteY) => {
+    if (!hoverRowItem.current || !movingMode) return;
 
-      if (columnAtPosition && scrollViewRef.current) {
-        if (x + xScrollThreshold > Utils.deviceWidth) {
-          scrollOffset.current += SCROLL_STEP;
+    repository.moveRow(
+      hoverRowItem.current,
+      absoluteX,
+      absoluteY,
+      listenRowChangeColumnJS
+    );
+
+    if (scrollViewRef.current && boardLayout.value.width > 0) {
+      const scrollTriggerWidth = xScrollThreshold;
+      const currentScrollOffset = scrollOffset.value;
+      const boardWidth = boardLayout.value.width;
+
+      if (absoluteX > boardLayout.value.x + boardWidth - scrollTriggerWidth) {
+        const newOffset = Math.min(
+          currentScrollOffset + SCROLL_STEP,
+          repository.getMaxScrollOffset()
+        );
+        if (newOffset > currentScrollOffset) {
+          scrollOffset.value = newOffset;
           scrollViewRef.current.scrollTo({
-            x: scrollOffset.current * dragSpeedFactor,
+            x: newOffset,
             y: 0,
-            animated: true,
+            animated: false,
           });
           repository.measureColumnsLayout();
-        } else if (x < xScrollThreshold) {
-          scrollOffset.current -= SCROLL_STEP;
+        }
+      } else if (absoluteX < boardLayout.value.x + scrollTriggerWidth) {
+        const newOffset = Math.max(0, currentScrollOffset - SCROLL_STEP);
+        if (newOffset < currentScrollOffset) {
+          scrollOffset.value = newOffset;
           scrollViewRef.current.scrollTo({
-            x: scrollOffset.current / dragSpeedFactor,
+            x: newOffset,
             y: 0,
-            animated: true,
+            animated: false,
           });
           repository.measureColumnsLayout();
         }
@@ -92,54 +100,45 @@ const DraggableBoard = ({
     }
   };
 
-  const onHandlerStateChange = event => {
-    switch (event.nativeEvent.state) {
-      case State.CANCELLED:
-      case State.END:
-      case State.FAILED:
-      case State.UNDETERMINED:
-        if (movingMode) {
-          translateX.value = 0;
-          translateY.value = 0;
+  const handleDragEnd = useCallback(() => {
+    if (movingMode && hoverRowItem.current) {
+      const item = hoverRowItem.current;
+      setHoverComponent(null);
+      setMovingMode(false);
 
-          absoluteX.value = 0;
-          absoluteY.value = 0;
+      repository.showRow(item);
+      repository.updateOriginalData();
 
-          setHoverComponent(null);
-          setMovingMode(false);
+      if (onDragEnd) {
+        onDragEnd(item.oldColumnId, item.columnId, item);
+      }
 
-          if (onDragEnd) {
-            onDragEnd(
-              hoverRowItem.current.oldColumnId,
-              hoverRowItem.current.columnId,
-              hoverRowItem.current,
-            );
-
-            repository.updateOriginalData();
-          }
-
-          repository.showRow(hoverRowItem.current);
-          hoverRowItem.current = null;
-        }
-
-        break;
+      hoverRowItem.current = null;
     }
-  };
 
-  const onPanGestureEvent = useAnimatedGestureHandler({
-    onStart: (event, ctx) => {
-      ctx.startX = translateX.value;
-      ctx.startY = translateY.value;
-    },
-    onActive: event => {
+    translateX.value = 0;
+    translateY.value = 0;
+  }, [movingMode, onDragEnd, repository, translateX, translateY]);
+
+  const panGesture = Gesture.Pan()
+    .enabled()
+    .onUpdate((event) => {
+      "worklet";
       translateX.value = event.translationX;
       translateY.value = event.translationY;
-      absoluteX.value = event.absoluteX;
-      absoluteY.value = event.absoluteY;
-      runOnJS(handleRowPosition)([absoluteX.value, absoluteY.value]);
-    },
-    onEnd: () => {},
-  });
+
+      const currentAbsoluteX = event.absoluteX;
+      const currentAbsoluteY = event.absoluteY;
+
+      runOnJS(handleRowPositionAndScroll)(currentAbsoluteX, currentAbsoluteY);
+    })
+    .onEnd(() => {
+      "worklet";
+      runOnJS(handleDragEnd)();
+    })
+    .onFinalize(() => {
+      "worklet";
+    });
 
   const animatedHoverStyle = useAnimatedStyle(() => ({
     transform: [
@@ -165,7 +164,8 @@ const DraggableBoard = ({
                 width,
                 height,
               },
-            ]}>
+            ]}
+          >
             {hoverComponent}
           </Animated.View>
         );
@@ -183,7 +183,7 @@ const DraggableBoard = ({
     setHoverComponent(hoverItem);
   };
 
-  const drag = column => {
+  const drag = (column) => {
     const hoverColumn = renderColumnWrapper({
       move: moveItem,
       item: column.data,
@@ -218,7 +218,7 @@ const DraggableBoard = ({
         drag: () => drag(column),
         layoutProps: {
           key,
-          ref: ref => repository.updateColumnRef(column.id, ref),
+          ref: (ref) => repository.updateColumnRef(column.id, ref),
           onLayout: () => repository.updateColumnLayout(column.id),
         },
       });
@@ -227,9 +227,7 @@ const DraggableBoard = ({
 
   return (
     <GestureHandlerRootView style={style.container}>
-      <PanGestureHandler
-        onGestureEvent={onPanGestureEvent}
-        onHandlerStateChange={onHandlerStateChange}>
+      <GestureDetector gesture={panGesture}>
         <Animated.View style={[style.container, boardStyle]}>
           <ScrollView
             ref={scrollViewRef}
@@ -239,11 +237,12 @@ const DraggableBoard = ({
             showsHorizontalScrollIndicator={false}
             showsVerticalScrollIndicator={false}
             scrollEventThrottle={16}
-            onScroll={event =>
+            onScroll={(event) =>
               (scrollOffset.current = event.nativeEvent.contentOffset.x)
             }
             onScrollEndDrag={() => repository.measureColumnsLayout()}
-            onMomentumScrollEnd={() => repository.measureColumnsLayout()}>
+            onMomentumScrollEnd={() => repository.measureColumnsLayout()}
+          >
             {renderColumns()}
             {Utils.isFunction(accessoryRight)
               ? accessoryRight()
@@ -251,7 +250,7 @@ const DraggableBoard = ({
           </ScrollView>
           {renderHoverComponent()}
         </Animated.View>
-      </PanGestureHandler>
+      </GestureDetector>
     </GestureHandlerRootView>
   );
 };
