@@ -1,6 +1,6 @@
 # React Native DnD Board
 
-A drag and drop Kanban board for React Native using [Reanimated (V3 Support up to 3.16.0)](https://github.com/software-mansion/react-native-reanimated) and [React Native Gesture Handler (V2 Support up to 2.25.0)](https://github.com/software-mansion/react-native-gesture-handler).
+A drag and drop Kanban board for React Native using [Reanimated (V3 Support up to 3.17.5)](https://github.com/software-mansion/react-native-reanimated) and [React Native Gesture Handler (V2 Support up to 2.25.0)](https://github.com/software-mansion/react-native-gesture-handler).
 
 <img src="./demo-ios.gif" width="400">   <img src="./demo-android.gif" width="396">
 
